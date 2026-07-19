@@ -1,0 +1,77 @@
+{
+  "users": [
+    {
+      "id": "3b68eb2e-8646-4029-94b0-bcfd561b968b",
+      "email": "test@gmail.com",
+      "passwordHash": "79870e919ed5ecabb627420d3c949749:321891d1661c657060b8ea30d662eb74d3f410ef955e8d89ef41e75551319f134d356cd880d090d98020edb6d4e1081e65d0b86edd8e244f362a7533037c59cd",
+      "createdAt": "2026-07-19T08:21:40.398Z",
+      "payday": 6
+    }
+  ],
+  "transactions": [
+    {
+      "title": "GAPOK TEST",
+      "amount": 1400000,
+      "type": "income",
+      "category": "lainnya",
+      "date": "2026-07-06",
+      "id": "139cf064-e3d9-4858-b1b5-a92447f63c0b",
+      "user_id": "3b68eb2e-8646-4029-94b0-bcfd561b968b"
+    },
+    {
+      "title": "CONTOH PENGELUARARN",
+      "amount": 900000,
+      "type": "expense",
+      "category": "tagihan",
+      "date": "2026-07-19",
+      "id": "acc16cda-b3f8-4e21-9ccf-7709d5fc927d",
+      "user_id": "3b68eb2e-8646-4029-94b0-bcfd561b968b"
+    },
+    {
+      "title": "GAJI KE 2 TEST",
+      "amount": 1000000,
+      "type": "income",
+      "category": "lainnya",
+      "date": "2026-07-15",
+      "id": "59dbd84e-0fc5-4e2d-a325-2325b4282b99",
+      "user_id": "3b68eb2e-8646-4029-94b0-bcfd561b968b"
+    },
+    {
+      "title": "GAJI KE 3 TTEST",
+      "amount": 500000,
+      "type": "income",
+      "category": "lainnya",
+      "date": "2026-07-16",
+      "id": "8efa33b1-8c49-41a2-8b55-487a9d7763c8",
+      "user_id": "3b68eb2e-8646-4029-94b0-bcfd561b968b"
+    },
+    {
+      "title": "BENSIN",
+      "amount": 150000,
+      "type": "expense",
+      "category": "transportasi",
+      "date": "2026-07-19",
+      "id": "76d937b7-dc8c-4cbc-ad47-1695a719a023",
+      "user_id": "3b68eb2e-8646-4029-94b0-bcfd561b968b"
+    },
+    {
+      "title": "HEALING LAH",
+      "amount": 2000000,
+      "type": "expense",
+      "category": "hiburan",
+      "date": "2026-07-19",
+      "id": "617e289b-18a3-4409-858c-743b960e048e",
+      "user_id": "3b68eb2e-8646-4029-94b0-bcfd561b968b"
+    }
+  ],
+  "sessions": {
+    "39fb11176bb9e658de894182e6ff7f5a953a76cf47e547ce39ecd3937f97b2b2": {
+      "userId": "3b68eb2e-8646-4029-94b0-bcfd561b968b",
+      "expiresAt": 1785054100497
+    },
+    "377e3b304e85389eed2c6c0702a682a9a27dc2fe361655a77c9fadb459f370f1": {
+      "userId": "3b68eb2e-8646-4029-94b0-bcfd561b968b",
+      "expiresAt": 1785058247860
+    }
+  }
+}

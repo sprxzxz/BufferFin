@@ -1,0 +1,6 @@
+{
+  "name": "BufferFin",
+  "description": "Aplikasi manajemen keuangan berbasis web BufferFin untuk mencatat, melacak, dan menganalisis pemasukan serta pengeluaran real-time dengan Analisis Prediktif AI di sisi backend.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
