@@ -6,8 +6,8 @@ import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
 
-// Port must be exactly 3001
-const PORT = 3001;
+// Port must be exactly 3000
+const PORT = 3000;
 
 // Lazy initialize Gemini client to avoid crashes if GEMINI_API_KEY is not defined initially
 let aiClient: GoogleGenAI | null = null;

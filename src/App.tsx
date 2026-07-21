@@ -119,7 +119,17 @@ export default function App() {
       throw new Error('Sesi Anda telah berakhir, silakan login kembali.');
     }
     
-    const data = await response.json();
+    const text = await response.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      if (!response.ok) {
+        throw new Error(`Koneksi/Sistem error (${response.status}). Silakan periksa konfigurasi Supabase Anda.`);
+      }
+      throw new Error('Format respon server tidak valid.');
+    }
+    
     if (!response.ok) {
       throw new Error(data.error || 'Terjadi kesalahan sistem.');
     }
