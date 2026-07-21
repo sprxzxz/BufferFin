@@ -637,7 +637,7 @@ export default function App() {
               </svg>
             </div>
             <h1 className="text-xl font-bold tracking-tight text-white">
-              Buffer<span className="text-emerald-400">Fin</span> <span className="text-zinc-500 font-normal text-xs">v2.0</span>
+              Buffer<span className="text-emerald-400">Fin</span> <span className="text-zinc-500 font-normal text-xs">v2.0-Beta-By-zxz</span>
             </h1>
           </div>
 
