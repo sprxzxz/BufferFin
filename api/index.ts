@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { db } from '../server-db.js';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
 
@@ -55,6 +55,114 @@ const authMiddleware = async (req: any, res: any, next: any) => {
   }
 };
 
+// ---------------------------------------------------------------------
+// AI ADVISOR CONFIG
+// ---------------------------------------------------------------------
+
+// Aturan eksplisit soal BAGAIMANA AI boleh memberi saran finansial.
+// Tanpa batasan ini, model bisa kasih saran generik atau (lebih buruk)
+// menyarankan hal berisiko seperti pinjol.
+const SYSTEM_INSTRUCTION = `Anda adalah BufferFin Advisor, konsultan keuangan pribadi untuk masyarakat Indonesia kelas menengah.
+
+ATURAN MEMBERI SARAN:
+1. Jangan pernah menghakimi kebiasaan finansial pengguna. Gunakan nada suportif, bukan menggurui.
+2. Saran harus SPESIFIK dan BISA DIEKSEKUSI dalam 1-7 hari ke depan. Hindari saran umum seperti "kurangi jajan" tanpa angka atau konteks konkret dari data yang diberikan.
+3. Jika data transaksi masih sedikit (kurang dari seminggu), akui keterbatasan ini secara eksplisit dan jangan buat proyeksi yang terdengar terlalu pasti.
+4. JANGAN PERNAH menyarankan tindakan finansial berisiko: pinjaman online (pinjol), skema investasi cepat kaya, judi, atau "gali lubang tutup lubang" (utang baru untuk menutup utang lama).
+5. Jika kondisi menunjukkan potensi masalah serius (defisit besar berulang, pola pengeluaran tidak sehat), sarankan dengan hormat agar pengguna mempertimbangkan konsultasi dengan penasihat keuangan berlisensi atau lembaga resmi seperti OJK. Jangan berpura-pura menjadi pengganti nasihat profesional untuk kasus berat.
+6. Fokus saran pada kategori pengeluaran terbesar pengguna secara spesifik, bukan saran finansial umum yang tidak terkait datanya.
+7. Selalu jawab dalam Bahasa Indonesia yang ramah dan mudah dipahami, hindari jargon finansial yang rumit.`;
+
+// Skema output terstruktur — menggantikan markdown bebas supaya frontend
+// bisa render tiap bagian secara konsisten (summary card, tips list, quote).
+const ANALYSIS_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    summary: {
+      type: Type.STRING,
+      description: 'Analisis singkat 2-3 kalimat, empatik dan realistis tentang kondisi keuangan pengguna saat ini.',
+    },
+    confidenceNote: {
+      type: Type.STRING,
+      description: 'Catatan singkat (1 kalimat) jika data transaksi masih terbatas/sedikit. String kosong jika data sudah cukup untuk proyeksi yang wajar.',
+    },
+    tips: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: 'Maksimal 3 saran konkret, spesifik, dan actionable — fokus pada kategori pengeluaran paling boros pengguna.',
+    },
+    motivationalQuote: {
+      type: Type.STRING,
+      description: 'Satu kalimat kutipan motivasi finansial singkat dalam Bahasa Indonesia.',
+    },
+  },
+  required: ['summary', 'tips', 'motivationalQuote'],
+};
+
+interface AiAdvice {
+  summary: string;
+  confidenceNote: string;
+  tips: string[];
+  motivationalQuote: string;
+}
+
+// Fallback rule-based generator, dipakai kalau Gemini API gagal/timeout/key belum di-set.
+// Bentuknya sengaja disamakan strukturnya dengan AiAdvice supaya frontend tidak perlu
+// tahu apakah saran ini berasal dari AI atau fallback.
+function generateFallbackAdvice(params: {
+  healthScore: 'Aman' | 'Peringatan' | 'Bahaya';
+  isDeficit: boolean;
+  currentBalance: number;
+  totalNonRoutineExpense: number;
+  dailyAverageRoutine: number;
+  projectedExpense: number;
+  daysUntilPayday: number;
+  deficitOrSurplusAmount: number;
+  topCategory: string;
+  topCategoryAmount: number;
+  daysWithRoutine: number;
+}): AiAdvice {
+  const {
+    healthScore, isDeficit, currentBalance, totalNonRoutineExpense,
+    dailyAverageRoutine, projectedExpense, daysUntilPayday,
+    deficitOrSurplusAmount, topCategory, topCategoryAmount, daysWithRoutine,
+  } = params;
+
+  const idr = (n: number) => Math.round(n).toLocaleString('id-ID');
+
+  const summary = isDeficit
+    ? `Kondisi keuangan Anda saat ini masuk kategori ${healthScore}. Berdasarkan rata-rata pengeluaran rutin harian sebesar Rp${idr(dailyAverageRoutine)}, Anda diproyeksikan mengalami defisit sekitar Rp${idr(deficitOrSurplusAmount)} sebelum hari gajian tiba dalam ${daysUntilPayday} hari.`
+    : `Kondisi keuangan Anda saat ini masuk kategori ${healthScore}. Saldo Anda diperkirakan cukup untuk menutupi kebutuhan rutin hingga gajian, dengan potensi surplus sekitar Rp${idr(deficitOrSurplusAmount)}.`;
+
+  const confidenceNote = daysWithRoutine <= 2
+    ? 'Data transaksi Anda masih sangat sedikit, jadi proyeksi ini masih kasar dan akan makin akurat seiring Anda rutin mencatat.'
+    : daysWithRoutine <= 7
+    ? 'Data transaksi Anda masih di bawah seminggu, proyeksi ini indikatif dan bisa berubah.'
+    : '';
+
+  const tips = [
+    `Kategori "${topCategory}" adalah pengeluaran terbesar Anda (Rp${idr(topCategoryAmount)}). Coba tetapkan batas mingguan untuk kategori ini dan pantau langsung di aplikasi.`,
+    `Prioritaskan sisa saldo Rp${idr(currentBalance)} untuk kebutuhan rutin (makanan, transportasi, kesehatan) terlebih dahulu sebelum pengeluaran non-esensial.`,
+    totalNonRoutineExpense > 0
+      ? `Anda tercatat memiliki pengeluaran non-rutin sebesar Rp${idr(totalNonRoutineExpense)} (tagihan/hiburan). Pertimbangkan menunda pengeluaran non-rutin baru sampai setelah gajian.`
+      : `Pastikan tanggal gajian Anda sudah diatur dengan akurat agar proyeksi pengeluaran lebih presisi.`,
+  ];
+
+  const motivationalQuote = 'Menghemat satu rupiah hari ini berarti mengamankan kebebasan finansial Anda di masa depan.';
+
+  return { summary, confidenceNote, tips, motivationalQuote };
+}
+
+// Validasi minimal supaya kita tidak meneruskan output AI yang cacat ke user.
+function isValidAdvice(data: any): data is AiAdvice {
+  return (
+    data &&
+    typeof data.summary === 'string' && data.summary.trim().length > 0 &&
+    Array.isArray(data.tips) && data.tips.length > 0 &&
+    typeof data.motivationalQuote === 'string'
+  );
+}
+
 // --- API ROUTES ---
 // (identik dengan server.ts, dipindah ke sini supaya bisa jalan sebagai Vercel Function)
 
@@ -91,6 +199,7 @@ app.post('/api/auth/login', async (req: express.Request, res: express.Response) 
     res.status(500).json({ error: 'Login gagal' });
   }
 });
+
 app.put('/api/user/profile', authMiddleware, async (req: any, res: express.Response) => {
   try {
     const { username, email } = req.body;
@@ -259,14 +368,27 @@ app.get('/api/analysis', authMiddleware, async (req: any, res: express.Response)
     const isDeficit = currentBalance < projectedExpense;
     const deficitOrSurplusAmount = Math.abs(currentBalance - projectedExpense);
 
-    let topCategory = 'Belum Ada';
-    let topCategoryAmount = 0;
-    Object.entries(categoryTotals).forEach(([cat, amt]) => {
-      if (amt > topCategoryAmount) {
-        topCategory = cat;
-        topCategoryAmount = amt;
-      }
-    });
+    // Breakdown kategori LENGKAP (bukan cuma top category) untuk konteks AI
+    const sortedCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
+    const topCategory = sortedCategories.length > 0 ? sortedCategories[0][0] : 'Belum Ada';
+    const topCategoryAmount = sortedCategories.length > 0 ? sortedCategories[0][1] : 0;
+
+    const categoryBreakdownText = sortedCategories.length > 0
+      ? sortedCategories.map(([cat, amt]) => `  - ${cat}: Rp${amt.toLocaleString('id-ID')}`).join('\n')
+      : '  (belum ada data pengeluaran)';
+
+    // 8 transaksi terakhir sebagai konteks konkret buat AI (bukan cuma angka agregat)
+    const recentTxText = transactions.slice(0, 8).length > 0
+      ? transactions.slice(0, 8).map(t =>
+          `  - ${t.date} | ${t.title} (${t.category}) | ${t.type === 'income' ? '+' : '-'}Rp${t.amount.toLocaleString('id-ID')}`
+        ).join('\n')
+      : '  (belum ada transaksi tercatat)';
+
+    const dataConfidenceLabel = daysWithRoutine <= 2
+      ? 'RENDAH (data masih sangat sedikit, kurang dari 3 hari tercatat)'
+      : daysWithRoutine <= 7
+      ? 'SEDANG (kurang dari seminggu data)'
+      : 'TINGGI (data cukup untuk proyeksi yang wajar)';
 
     let healthScore: 'Aman' | 'Peringatan' | 'Bahaya' = 'Aman';
     if (isDeficit) {
@@ -275,7 +397,14 @@ app.get('/api/analysis', authMiddleware, async (req: any, res: express.Response)
       healthScore = 'Peringatan';
     }
 
-    let savingAdvice = '';
+    const fallbackParams = {
+      healthScore, isDeficit, currentBalance, totalNonRoutineExpense,
+      dailyAverageRoutine, projectedExpense, daysUntilPayday,
+      deficitOrSurplusAmount, topCategory, topCategoryAmount, daysWithRoutine,
+    };
+
+    let advice: AiAdvice;
+
     try {
       const ai = getGeminiClient();
       const prompt = `
@@ -283,50 +412,50 @@ Analisis keuangan pengguna (dalam mata uang Rupiah):
 - Saldo Sekarang: Rp ${currentBalance.toLocaleString('id-ID')}
 - Total Pemasukan: Rp ${totalIncome.toLocaleString('id-ID')}
 - Total Pengeluaran: Rp ${totalExpense.toLocaleString('id-ID')}
-- Pengeluaran Rutin (Makanan, Bensin/Transportasi, Kesehatan): Rp ${totalRoutineExpense.toLocaleString('id-ID')}
-- Pengeluaran Non-Rutin/Besar (Belanja, Tagihan, Hiburan/Healing): Rp ${totalNonRoutineExpense.toLocaleString('id-ID')}
+- Pengeluaran Rutin (Makanan, Transportasi, Kesehatan): Rp ${totalRoutineExpense.toLocaleString('id-ID')}
+- Pengeluaran Non-Rutin (Belanja, Tagihan, Hiburan): Rp ${totalNonRoutineExpense.toLocaleString('id-ID')}
 - Rata-rata Pengeluaran Rutin Harian: Rp ${dailyAverageRoutine.toLocaleString('id-ID')}/hari
 - Hari Menuju Gajian (tanggal ${paydayDay}): ${daysUntilPayday} hari
-- Proyeksi Pengeluaran Rutin sampai Gajian: Rp ${projectedExpense.toLocaleString('id-ID')}
-- Prediksi Status Keuangan s/d Gajian: ${isDeficit ? `MINUS/DEFISIT sebesar Rp ${deficitOrSurplusAmount.toLocaleString('id-ID')}` : `SURPLUS sebesar Rp ${deficitOrSurplusAmount.toLocaleString('id-ID')}`}
-- Kategori Paling Boros: ${topCategory} (Total: Rp ${topCategoryAmount.toLocaleString('id-ID')})
+- Proyeksi Pengeluaran Rutin s/d Gajian: Rp ${projectedExpense.toLocaleString('id-ID')}
+- Status Proyeksi: ${isDeficit ? `DEFISIT sebesar Rp ${deficitOrSurplusAmount.toLocaleString('id-ID')}` : `SURPLUS sebesar Rp ${deficitOrSurplusAmount.toLocaleString('id-ID')}`}
+- Tingkat Keyakinan Data: ${dataConfidenceLabel}
 
-PENTING: Pengguna sempat bingung karena jika mereka mencatat pengeluaran besar satu kali (seperti "Healing" atau tagihan bulanan), sistem lama mengasumsikannya berulang setiap hari sehingga menghasilkan angka proyeksi minus puluhan juta yang tidak realistis.
+Breakdown Pengeluaran per Kategori:
+${categoryBreakdownText}
 
-Kini, kami memisahkan pengeluaran menjadi RUTIN (makanan, transportasi, dll) dan NON-RUTIN (tagihan bulanan, belanja besar, hiburan sekali-sekali yang TIDAK berulang setiap hari). Proyeksi masa depan di atas HANYA mengalikan pengeluaran RUTIN harian dengan sisa hari menuju gajian.
+Transaksi Terakhir (maks 8):
+${recentTxText}
 
-Harap berikan respon analitis yang cerdas dalam Bahasa Indonesia dengan format markdown:
-1. Kalimat analisis singkat yang berempati namun realistis tentang kondisi keuangan mereka saat ini. Jelaskan secara ramah bahwa pengeluaran besar seperti "Healing" atau "Tagihan" adalah pengeluaran non-rutin yang dihitung sekali (tidak harian), sehingga proyeksi keuangan mereka saat ini jauh lebih akurat dan rasional (Hanya mengalikan pengeluaran harian rutin seperti makanan & bensin).
-2. Berikan maksimal 3 saran/tips penghematan cerdas yang konkret, berfokus terutama pada kategori paling boros (${topCategory}) agar mereka terhindar dari defisit atau bisa menabung lebih banyak.
-3. Satu kalimat kutipan motivasi keuangan yang menginspirasi.
+Ingat: proyeksi di atas HANYA mengalikan pengeluaran RUTIN harian dengan sisa hari menuju gajian — pengeluaran non-rutin (tagihan bulanan, belanja besar, hiburan sesekali) TIDAK diasumsikan berulang setiap hari.
+
+Berikan analisis mengikuti format terstruktur yang diminta. Gunakan transaksi terakhir di atas untuk membuat saran yang spesifik, bukan generik.
 `;
+
       const response = await ai.models.generateContent({
         model: 'gemini-3.5-flash',
         contents: prompt,
         config: {
-          systemInstruction: 'Anda adalah konsultan keuangan pribadi AI (BufferFin Advisor) yang ramah, profesional, dan memberikan saran penghematan berbasis data nyata yang sangat praktis bagi masyarakat Indonesia.',
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
+          responseSchema: ANALYSIS_RESPONSE_SCHEMA,
         },
       });
-      savingAdvice = response.text || '';
+
+      const parsed = JSON.parse(response.text || '{}');
+
+      if (!isValidAdvice(parsed)) {
+        throw new Error('Struktur respons AI tidak valid');
+      }
+
+      advice = {
+        summary: parsed.summary,
+        confidenceNote: parsed.confidenceNote || '',
+        tips: parsed.tips.slice(0, 3),
+        motivationalQuote: parsed.motivationalQuote,
+      };
     } catch (aiErr: any) {
-      console.error('Gemini API call failed, using rule-based generator:', aiErr);
-      savingAdvice = `### Analisis Finansial BufferFin (Smart Model)
-
-Kondisi keuangan Anda saat ini masuk dalam kategori **${healthScore}**. Kami mendeteksi Anda melakukan pengeluaran besar satu-kali/bulanan sebesar **Rp ${totalNonRoutineExpense.toLocaleString('id-ID')}** (seperti Tagihan atau Hiburan/Healing) yang tidak berulang setiap hari.
-
-Untuk itu, kami telah menyesuaikan kalkulasi proyeksi secara cerdas:
-- **Rerata Pengeluaran Rutin:** Rp ${Math.round(dailyAverageRoutine).toLocaleString('id-ID')} /hari (Makanan, Transportasi, Kesehatan).
-- **Proyeksi Rutin s/d Gajian (${daysUntilPayday} hari lagi):** Rp ${projectedExpense.toLocaleString('id-ID')}.
-- **Status Saldo Sekarang:** Rp ${currentBalance.toLocaleString('id-ID')}.
-
-${isDeficit ? `⚠️ **Peringatan Defisit:** Dengan saldo saat ini Rp ${currentBalance.toLocaleString('id-ID')}, Anda diproyeksikan akan mengalami defisit kebutuhan rutin sebesar sekitar **Rp ${deficitOrSurplusAmount.toLocaleString('id-ID')}** sebelum hari gajian.` : `Sisa saldo Anda diperkirakan aman untuk meng-cover kebutuhan rutin hingga hari gajian dengan potensi surplus sekitar **Rp ${deficitOrSurplusAmount.toLocaleString('id-ID')}**.`}
-
-#### 💡 Saran Penghematan Cerdas:
-1. **Bedakan Kebutuhan & Keinginan (Primer vs Sekunder):** Pengeluaran non-rutin seperti *${topCategory}* (Rp ${topCategoryAmount.toLocaleString('id-ID')}) adalah pengeluaran terbesar Anda saat ini. Batasi hiburan/belanja non-esensial hingga gajian tiba.
-2. **Amankan Anggaran Rutin:** Prioritaskan sisa dana Anda untuk kebutuhan pokok harian seperti Makanan dan Transportasi terlebih dahulu.
-3. **Atur Tanggal Gajian yang Akurat:** Pastikan siklus gajian Anda sudah diatur dengan benar agar kalkulasi hari menuju gajian lebih presisi.
-
-*"Menghemat satu rupiah hari ini berarti mengamankan kebebasan finansial Anda di masa depan."*`;
+      console.error('Gemini API call failed or returned invalid data, using rule-based fallback:', aiErr);
+      advice = generateFallbackAdvice(fallbackParams);
     }
 
     res.json({
@@ -343,7 +472,8 @@ ${isDeficit ? `⚠️ **Peringatan Defisit:** Dengan saldo saat ini Rp ${current
         topCategory,
         topCategoryAmount,
         healthScore,
-        savingAdvice,
+        // Objek terstruktur, bukan string markdown bebas
+        savingAdvice: advice,
         paydayDay,
         totalRoutineExpense,
         totalNonRoutineExpense,
@@ -359,4 +489,3 @@ ${isDeficit ? `⚠️ **Peringatan Defisit:** Dengan saldo saat ini Rp ${current
 
 // Vercel akan memanggil Express app ini langsung sebagai handler(req, res)
 export default app;
-  
