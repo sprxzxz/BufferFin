@@ -921,7 +921,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* AI Markdown Advice Content */}
+              {/* AI Structured Advice Content */}
               <div className="flex-1 bg-zinc-950/50 border border-zinc-800 rounded-xl p-5 overflow-y-auto max-h-[300px] sm:max-h-[360px] text-xs sm:text-sm leading-relaxed text-zinc-300">
                 {isAnalysisLoading ? (
                   <div className="flex flex-col items-center justify-center py-12 gap-3 text-zinc-400">
@@ -929,46 +929,41 @@ export default function App() {
                     <p className="text-xs font-semibold">Menganalisis pengeluaran Anda dan merumuskan strategi hemat...</p>
                   </div>
                 ) : analysis && analysis.savingAdvice ? (
-                  <div className="prose prose-invert prose-xs max-w-none space-y-4">
-                    {/* Parse simple markdown line by line to support customized headers and paragraphs nicely inside pure React */}
-                    {analysis.savingAdvice.split('\n').map((line, idx) => {
-                      const trimmed = line.trim();
-                      if (trimmed.startsWith('###')) {
-                        return <h4 key={idx} className="text-sm font-bold text-indigo-300 mt-3 border-b border-zinc-800 pb-1">{trimmed.replace('###', '')}</h4>;
-                      }
-                      if (trimmed.startsWith('####')) {
-                        return <h5 key={idx} className="text-xs font-bold text-indigo-400 mt-2 uppercase tracking-wide">{trimmed.replace('####', '')}</h5>;
-                      }
-                      if (trimmed.startsWith('**') && trimmed.endsWith('**')) {
-                        return <p key={idx} className="text-zinc-100 font-semibold">{trimmed.replace(/\*\*/g, '')}</p>;
-                      }
-                      if (trimmed.startsWith('*') && trimmed.endsWith('*')) {
-                        return <blockquote key={idx} className="border-l-2 border-indigo-500/40 pl-3 italic text-indigo-200/90 py-1 bg-indigo-500/5 rounded-r-lg">{trimmed.replace(/\*/g, '')}</blockquote>;
-                      }
-                      if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
-                        // highlight keyword
-                        const content = trimmed.replace(/^[-*]\s*/, '');
-                        return (
-                           <div key={idx} className="flex items-start gap-2.5 my-1.5 pl-1">
-                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 shrink-0 animate-pulse" />
-                             <span>{content}</span>
-                           </div>
-                        );
-                      }
-                      if (trimmed.match(/^\d+\./)) {
-                        const content = trimmed.replace(/^\d+\.\s*/, '');
-                        return (
-                          <div key={idx} className="flex items-start gap-2.5 my-2.5 pl-1">
+                  <div className="space-y-4">
+                    {/* Ringkasan analisis */}
+                    <p className="text-zinc-100">{analysis.savingAdvice.summary}</p>
+
+                    {/* Catatan keyakinan data, kalau ada */}
+                    {analysis.savingAdvice.confidenceNote && (
+                      <div className="flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-amber-300 text-xs">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>{analysis.savingAdvice.confidenceNote}</span>
+                      </div>
+                    )}
+
+                    {/* Daftar saran/tips */}
+                    {analysis.savingAdvice.tips && analysis.savingAdvice.tips.length > 0 && (
+                      <div className="space-y-2.5">
+                        <h5 className="text-xs font-bold text-indigo-400 uppercase tracking-wide">
+                          Saran Penghematan
+                        </h5>
+                        {analysis.savingAdvice.tips.map((tip, idx) => (
+                          <div key={idx} className="flex items-start gap-2.5 pl-1">
                             <span className="font-bold text-indigo-400 text-xs mt-0.5 shrink-0 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded-md">
-                              {trimmed.match(/^\d+/)?.[0]}
+                              {idx + 1}
                             </span>
-                            <span>{content}</span>
+                            <span>{tip}</span>
                           </div>
-                        );
-                      }
-                      if (!trimmed) return <div key={idx} className="h-2" />;
-                      return <p key={idx}>{line}</p>;
-                    })}
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Kutipan motivasi */}
+                    {analysis.savingAdvice.motivationalQuote && (
+                      <blockquote className="border-l-2 border-indigo-500/40 pl-3 italic text-indigo-200/90 py-1 bg-indigo-500/5 rounded-r-lg">
+                        {analysis.savingAdvice.motivationalQuote}
+                      </blockquote>
+                    )}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 text-zinc-500 text-center gap-3">

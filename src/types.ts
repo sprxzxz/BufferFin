@@ -16,6 +16,13 @@ export interface Transaction {
   date: string; // YYYY-MM-DD
 }
 
+export interface SavingAdvice {
+  summary: string;
+  confidenceNote: string;
+  tips: string[];
+  motivationalQuote: string;
+}
+
 export interface Analysis {
   balance: number;
   totalIncome: number;
@@ -28,7 +35,7 @@ export interface Analysis {
   topCategory: string;
   topCategoryAmount: number;
   healthScore: 'Aman' | 'Peringatan' | 'Bahaya';
-  savingAdvice: string;
+  savingAdvice: SavingAdvice;
   paydayDay?: number;
   totalRoutineExpense?: number;
   totalNonRoutineExpense?: number;
