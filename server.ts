@@ -124,6 +124,23 @@ async function startServer() {
     }
   });
 
+  // User: Update Profile (username, email)
+  app.put('/api/user/profile', authMiddleware, async (req: any, res: express.Response) => {
+    try {
+      const { username, email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: 'Email harus diisi' });
+      }
+      const user = await db.updateUserProfile(req.userId, username || '', email);
+      if (!user) {
+        return res.status(404).json({ error: 'User tidak ditemukan' });
+      }
+      res.json({ user });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Gagal memperbarui profil' });
+    }
+  });
+
   // Auth: Logout
   app.post('/api/auth/logout', async (req: express.Request, res: express.Response) => {
     const authHeader = req.headers.authorization;

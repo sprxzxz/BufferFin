@@ -3,6 +3,7 @@ export interface User {
   email: string;
   createdAt: string;
   payday?: number;
+  username?: string;
 }
 
 export interface Transaction {

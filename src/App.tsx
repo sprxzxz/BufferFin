@@ -30,6 +30,7 @@ import {
   TrendingDown as ArrowDownRight,
 } from 'lucide-react';
 import { CATEGORIES, CATEGORY_MAP, Transaction, Analysis, User } from './types';
+import { ProfileModal } from './components/ProfileModal';
 
 const formatRupiah = (num: number): string => {
   return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -45,6 +46,7 @@ export default function App() {
   // Payday Editing State
   const [isEditingPayday, setIsEditingPayday] = useState(false);
   const [tempPayday, setTempPayday] = useState('25');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   
   // App States
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -543,7 +545,7 @@ export default function App() {
               Selamat Datang di BufferFin! 👋
             </h1>
             <p className="text-xs text-zinc-400 mt-2.5 leading-relaxed">
-              Halo <span className="text-zinc-200 font-semibold">{currentUser.email}</span>. Silakan isi data tanggal gajian bulanan Anda untuk memulai analisis keuangan cerdas berbasis AI.
+              Halo <span className="text-zinc-200 font-semibold">{currentUser.username || currentUser.email}</span>. Silakan isi data tanggal gajian bulanan Anda untuk memulai analisis keuangan cerdas berbasis AI.
             </p>
           </div>
 
@@ -630,16 +632,31 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2.5 bg-zinc-950 px-3.5 py-1.5 rounded-full border border-zinc-800 text-xs text-zinc-400 font-medium">
+            {/* Desktop Profile Button */}
+            <button
+              onClick={() => setIsProfileModalOpen(true)}
+              className="hidden sm:flex items-center gap-2.5 bg-zinc-950 hover:bg-zinc-900 px-3.5 py-1.5 rounded-full border border-zinc-800 hover:border-zinc-700 text-xs text-zinc-400 hover:text-zinc-200 font-medium transition-all cursor-pointer"
+              title="Pengaturan Profil"
+            >
               <UserIcon className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{email}</span>
+              <span>{currentUser?.username || email}</span>
               {currentUser?.payday && (
                 <>
                   <span className="w-[1px] h-3 bg-zinc-800" />
                   <span className="text-emerald-400 text-[11px] font-bold">Gajian: Tgl {currentUser.payday}</span>
                 </>
               )}
-            </div>
+            </button>
+
+            {/* Mobile Profile Button */}
+            <button
+              onClick={() => setIsProfileModalOpen(true)}
+              className="sm:hidden p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 transition-all cursor-pointer"
+              title="Pengaturan Profil"
+            >
+              <UserIcon className="w-4 h-4 text-indigo-400" />
+            </button>
+
             <button
               onClick={handleLogout}
               className="inline-flex items-center gap-2 bg-zinc-850 hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors border border-zinc-700 cursor-pointer"
@@ -1392,6 +1409,21 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* PROFILE SETTINGS MODAL */}
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        currentUser={currentUser}
+        onProfileUpdated={(updatedUser) => {
+          setCurrentUser(updatedUser);
+          if (updatedUser.email) {
+            setEmail(updatedUser.email);
+            localStorage.setItem('bufferfin_email', updatedUser.email);
+          }
+        }}
+        apiFetch={apiFetch}
+      />
     </div>
   );
 }

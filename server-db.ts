@@ -26,6 +26,7 @@ export interface User {
   passwordHash: string;
   createdAt: string;
   payday?: number; // Payday date (1 to 31, default 25)
+  username?: string; // Custom username/display name
 }
 
 export interface Transaction {
@@ -55,6 +56,7 @@ function mapUser(dbUser: any): User {
     passwordHash: dbUser.password_hash || dbUser.passwordHash || '',
     createdAt: dbUser.created_at || dbUser.createdAt || new Date().toISOString(),
     payday: dbUser.payday ?? 25,
+    username: dbUser.username || '',
   };
 }
 
@@ -254,6 +256,54 @@ class HybridDB {
       if (!user) return null;
       user.payday = payday;
       await this.saveLocal();
+      const { passwordHash, ...safeUser } = user;
+      return safeUser;
+    }
+  }
+
+  async updateUserProfile(userId: string, username: string, email: string): Promise<Omit<User, 'passwordHash'> | null> {
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (isSupabaseEnabled && supabase) {
+      // Check if email is already taken by ANOTHER user
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', cleanEmail)
+        .neq('id', userId)
+        .maybeSingle();
+
+      if (existing) {
+        throw new Error('Email sudah terdaftar oleh pengguna lain');
+      }
+
+      const { data: user, error } = await supabase
+        .from('users')
+        .update({ username, email: cleanEmail })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error || !user) {
+        throw new Error(error?.message || 'Gagal memperbarui profil di Supabase');
+      }
+      const mappedUser = mapUser(user);
+      const { passwordHash, ...safeUser } = mappedUser;
+      return safeUser;
+    } else {
+      await this.initLocal();
+      const existing = this.localData.users.find(u => u.email === cleanEmail && u.id !== userId);
+      if (existing) {
+        throw new Error('Email sudah terdaftar oleh pengguna lain');
+      }
+
+      const user = this.localData.users.find(u => u.id === userId);
+      if (!user) return null;
+
+      user.username = username;
+      user.email = cleanEmail;
+      await this.saveLocal();
+
       const { passwordHash, ...safeUser } = user;
       return safeUser;
     }
